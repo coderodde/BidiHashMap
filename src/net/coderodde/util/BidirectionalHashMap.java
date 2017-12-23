@@ -1,8 +1,12 @@
 package net.coderodde.util;
 
+import com.sun.xml.internal.ws.server.UnsupportedMediaException;
 import java.util.AbstractMap;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -74,6 +78,13 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         @Override
         public V setValue(V value) {
             throw new UnsupportedOperationException("");
+        }
+        
+        public String toString() {
+            return "[" + Objects.toString(key) 
+                       + " -> " 
+                       + Objects.toString(value) 
+                       + "]";
         }
     }
     
@@ -164,6 +175,16 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     private static final int DEFAULT_CAPACITY = 8;
     
     /**
+     * The minimum capacity of both the tables.
+     */
+    private static final int MINIMUM_CAPACITY = 8;
+    
+    /**
+     * The default load factor.
+     */
+    private static final float DEFAULT_LOAD_FACTOR = 1.0f;
+    
+    /**
      * The forward hash table mapping keys to the mappings.
      */
     private KeyNode<K, V>[] keyNodes = new KeyNode[DEFAULT_CAPACITY];
@@ -209,6 +230,28 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
      */
     private int moduloMask = keyNodes.length - 1;
     
+    private final float loadFactor;
+    private EntrySet entrySet = new EntrySet();
+    
+    public BidirectionalHashMap(float loadFactor, int capacity) {
+        this.loadFactor = checkLoadFactor(loadFactor);
+        capacity = fixCapacity(capacity);
+        this.keyNodes = new KeyNode[capacity];
+        this.valueNodes = new ValueNode[capacity];
+    }
+    
+    public BidirectionalHashMap(float loadFactor) {
+        this(loadFactor, DEFAULT_CAPACITY);
+    }
+    
+    public BidirectionalHashMap(int capacity) {
+        this(DEFAULT_LOAD_FACTOR, capacity);
+    }
+    
+    public BidirectionalHashMap() {
+        this(DEFAULT_LOAD_FACTOR, DEFAULT_CAPACITY);
+    }
+    
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
         for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
@@ -247,8 +290,67 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         return keyNode == null ? null : keyNode.mapping.value;
     }
 
+    private void expand() {
+        KeyNode<K, V>[] newKeyNodes = new KeyNode[keyNodes.length << 1];
+        ValueNode<K, V>[] newValueNodes = new ValueNode[newKeyNodes.length];
+        
+        for (KeyNode<K, V> node = keyIterationHead; 
+                node != null;
+                node = node.down) {
+            insertKeyNode(node, newKeyNodes);
+        }
+        
+        for (ValueNode<K, V> node = valueIterationHead;
+                node != null;
+                node = node.down) {
+            insertValueNode(node, newValueNodes);
+        }
+        
+        this.keyNodes = newKeyNodes;
+        this.valueNodes = newValueNodes;
+        this.moduloMask = newKeyNodes.length - 1;
+    }
+    
+    private void insertKeyNode(KeyNode<K, V> keyNode, 
+                               KeyNode<K, V>[] newKeyNodes) {
+        int newModuloMask = newKeyNodes.length - 1;
+        int index = keyNode.mapping.keyHashCode & newModuloMask;
+        
+        if (newKeyNodes[index] == null) {
+            newKeyNodes[index] = keyNode;
+            keyNode.next = null;
+        } else {
+            keyNode.next = newKeyNodes[index];
+            newKeyNodes[index].prev = keyNode;
+            newKeyNodes[index] = keyNode;
+        }
+        
+        keyNode.prev = null;
+    }
+    
+    private void insertValueNode(ValueNode<K, V> valueNode,
+                                 ValueNode<K, V>[] newValueNodes) {
+        int newModuloMask = newValueNodes.length - 1;
+        int index = valueNode.mapping.valueHashCode & newModuloMask;
+        
+        if (newValueNodes[index] == null) {
+            newValueNodes[index] = valueNode;
+            valueNode.next = null;
+        } else {
+            valueNode.next = newValueNodes[index];
+            newValueNodes[index].prev = valueNode;
+            newValueNodes[index] = valueNode;
+        }
+        
+        valueNode.prev = null;
+    }
+    
     @Override
     public V put(K key, V value) {
+        if (isFull()) {
+            expand();
+        }
+        
         KeyNode<K, V> keyNode = accessKeyNode(key);
         V oldValue;
         
@@ -302,12 +404,143 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
 
     @Override
     public Set<K> keySet() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException();
     }
-
+    
     @Override
     public Set<Entry<K, V>> entrySet() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return entrySet;
+    }
+    
+    private final class EntrySet implements Set<Entry<K, V>> {
+
+        private final class EntrySetIterator implements Iterator<Entry<K, V>> {
+            
+            private final int expectedModCount = modificationCount;
+            private int iterated = 0;
+            private KeyNode<K, V> entry = keyIterationHead;
+            
+            @Override
+            public boolean hasNext() {
+                checkModificationCount();
+                return iterated < size;
+            }
+
+            @Override
+            public Entry<K, V> next() {
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                
+                KeyNode<K, V> ret = entry;
+                entry = entry.down;
+                iterated++;
+                return ret.mapping;
+            }
+            
+            private void checkModificationCount() {
+                if (expectedModCount != modificationCount) {
+                    throw new ConcurrentModificationException();
+                }
+            }
+        }
+        
+        @Override
+        public int size() {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public Iterator<Entry<K, V>> iterator() {
+            return new EntrySetIterator();
+        }
+
+        @Override
+        public Object[] toArray() {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean add(Entry<K, V> e) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean containsAll(Collection<?> c) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean addAll(Collection<? extends Entry<K, V>> c) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean retainAll(Collection<?> c) {
+            throw new UnsupportedMediaException();
+        }
+
+        @Override
+        public boolean removeAll(Collection<?> c) {
+            throw new UnsupportedMediaException();    
+        }
+
+        @Override
+        public void clear() {
+            throw new UnsupportedMediaException();
+        }
+    }
+    
+    private float checkLoadFactor(float loadFactor) {
+        if (Float.isNaN(loadFactor)) {
+            throw new IllegalArgumentException("The load factor is NaN.");
+        }
+        
+        if (loadFactor <= 0.0f) {
+            throw new IllegalArgumentException(
+                    "The load factor is too small: " + loadFactor);
+        }
+        
+        return loadFactor;
+    }
+    
+    /**
+     * Makes sure the capacity is no smaller than {@code MINIMUM_CAPACITY} and 
+     * is a power of two.
+     * 
+     * @param capacity the requested capacity.
+     * @return the actual capacity.
+     */
+    private int fixCapacity(int capacity) {
+        capacity = Math.max(capacity, MINIMUM_CAPACITY);
+        
+        int actualCapacity = 1;
+        
+        while (actualCapacity < capacity) {
+            actualCapacity <<= 1;
+        }
+        
+        return actualCapacity;
     }
 
     private ValueNode<K, V> accessValueNode(Object value) {
@@ -531,5 +764,9 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         }
         
         return null;
+    }
+    
+    private boolean isFull() {
+        return size > (int)(loadFactor * keyNodes.length);
     }
 }
