@@ -111,6 +111,10 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
          * <b>after</b> this node.
          */
         KeyNode<K, V> down;
+        
+        KeyNode(Mapping<K, V> mapping) {
+            this.mapping = mapping;
+        }
     }
     
     /**
@@ -147,6 +151,10 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
          * <b>after</b> this node.
          */
         ValueNode<K, V> down;
+        
+        ValueNode(Mapping<K, V> mapping) {
+            this.mapping = mapping;
+        }
     }
     
     /**
@@ -158,14 +166,12 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     /**
      * The forward hash table mapping keys to the mappings.
      */
-    private KeyNode<K, V>[] keyNodes = 
-           (KeyNode<K, V>[]) new Object[DEFAULT_CAPACITY];
+    private KeyNode<K, V>[] keyNodes = new KeyNode[DEFAULT_CAPACITY];
     
     /**
      * The backward hash table mapping values to the mappings.
      */
-    private ValueNode<K, V>[] valueNodes = 
-           (ValueNode<K, V>[]) new Object[DEFAULT_CAPACITY];
+    private ValueNode<K, V>[] valueNodes = new ValueNode[DEFAULT_CAPACITY];
     
     /**
      * Points to the oldest key node.
@@ -257,6 +263,83 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         modificationCount++;
         return oldValue;
     }
+
+    @Override
+    public V remove(Object key) {
+        KeyNode<K, V> keyNode = accessKeyNode(key);
+        
+        if (keyNode == null) {
+            return null;
+        }
+        
+        size--;
+        modificationCount++;
+        return doRemove(keyNode);
+    }
+    
+    @Override
+    public void clear() {
+        modificationCount += size;
+        
+        KeyNode<K, V> keyNode = keyIterationHead;
+        
+        while (keyNode != null) {
+            int index = keyNode.mapping.keyHashCode & moduloMask;
+            keyNodes[index] = null;
+            keyNode = keyNode.next;
+        }
+        
+        ValueNode<K, V> valueNode = valueIterationHead;
+        
+        while (valueNode != null) {
+            int index = valueNode.mapping.valueHashCode & moduloMask;
+            valueNodes[index] = null;
+            valueNode = valueNode.next;
+        }
+        
+        size = 0;
+    }
+
+    @Override
+    public Set<K> keySet() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    private ValueNode<K, V> accessValueNode(Object value) {
+        int inputValueHashCode = Objects.hashCode(value);
+        int inputValueIndex = inputValueHashCode & moduloMask;
+        
+        for (ValueNode<K, V> node = valueNodes[inputValueIndex];
+                node != null;
+                node = node.next) {
+            if (node.mapping.valueHashCode == inputValueHashCode 
+                    && Objects.equals(node.mapping.value, value)) {
+                return node;
+            }
+        }
+        
+        return null;
+    }
+    
+    private ValueNode<K, V> accessValueNode(Object value, int valueHashCode) {
+        int inputValueIndex = valueHashCode & moduloMask;
+        
+        for (ValueNode<K, V> node = valueNodes[inputValueIndex];
+                node != null;
+                node = node.next) {
+            if (node.mapping.valueHashCode == valueHashCode
+                    && Objects.equals(node.mapping.value, value)) {
+                return node;
+            }
+        }
+    
+        return null;
+    }
     
     private V updateValue(KeyNode<K, V> keyNode, V newValue) {
         V oldValue = keyNode.mapping.value;
@@ -266,24 +349,19 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         
         unlinkValueNodeFromIterationList(valueNode);
         appendValueNodeToIterationList(valueNode);
-        transplantValueNode(valueNode, newValue);
+        unlinkValueNodeFromCollisionChain(valueNode);
+        appendValueNodeToCollisionChain(valueNode, newValue);
         return oldValue;
     }
     
-    private void transplantValueNode(ValueNode<K, V> valueNode,
-                                     V newValue) {
-        unlinkValueNodeFromCollisionChain(valueNode);
-        linkValueNodeToCollisionChain(valueNode, newValue);
-    }
-    
-    private void linkValueNodeToCollisionChain(ValueNode<K, V> valueNode,
+    private void appendValueNodeToCollisionChain(ValueNode<K, V> valueNode,
                                                V newValue) {
         int newValueHashCode = Objects.hashCode(newValue);
         int newValueIndex = newValueHashCode & moduloMask;
         
         if (valueNodes[newValueIndex] != null) {
             valueNodes[newValueIndex].prev = valueNode;
-            valueNode = valueNodes[newValueIndex];
+            valueNode.next = valueNodes[newValueIndex];
             valueNodes[newValueIndex] = valueNode;
         } else {
             valueNodes[newValueIndex] = valueNode;
@@ -357,8 +435,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
             
             if (valueIterationHead != null) {
                 valueIterationHead.up = null;
-            } else {
-                System.out.println("yes");
             }
         }
         
@@ -369,9 +445,7 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
             
             if (valueIterationTail != null) {
                 valueIterationTail.down = null;
-            } else {
-                System.out.println("yes 2");
-            }
+            } 
         }
     }
     
@@ -388,11 +462,8 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     
     private void putNonExisting(K key, V value) {
         Mapping<K, V> mapping = new Mapping<>(key, value);
-        KeyNode<K, V> keyNode = new KeyNode<>();
-        ValueNode<K, V> valueNode = new ValueNode<>();
-        
-        keyNode.mapping = mapping;
-        valueNode.mapping = mapping;
+        KeyNode<K, V> keyNode = new KeyNode<>(mapping);
+        ValueNode<K, V> valueNode = new ValueNode<>(mapping);
         
         // Link in the iteration list:
         if (size == 0) {
@@ -432,19 +503,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
             valueNodes[valueIndex] = valueNode;
         }
     }
-
-    @Override
-    public V remove(Object key) {
-        KeyNode<K, V> keyNode = accessKeyNode(key);
-        
-        if (keyNode == null) {
-            return null;
-        }
-        
-        size--;
-        modificationCount++;
-        return doRemove(keyNode);
-    }
     
     private V doRemove(KeyNode<K, V> keyNode) {
         Mapping<K, V> mapping = keyNode.mapping;
@@ -457,25 +515,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         unlinkValueNodeFromCollisionChain(valueNode);
         
         return mapping.value;
-    }
-    
-    @Override
-    public void clear() {
-        for (KeyNode<K, V> keyNode = keyIterationHead;
-                keyNode != null;
-                keyNode = keyNode.down) {
-            
-        }
-    }
-
-    @Override
-    public Set<K> keySet() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public Set<Entry<K, V>> entrySet() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     private KeyNode<K, V> accessKeyNode(Object key) {
@@ -491,37 +530,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
             }
         }
         
-        return null;
-    }
-
-    private ValueNode<K, V> accessValueNode(Object value) {
-        int inputValueHashCode = Objects.hashCode(value);
-        int inputValueIndex = inputValueHashCode & moduloMask;
-        
-        for (ValueNode<K, V> node = valueNodes[inputValueIndex];
-                node != null;
-                node = node.next) {
-            if (node.mapping.valueHashCode == inputValueHashCode 
-                    && Objects.equals(node.mapping.value, value)) {
-                return node;
-            }
-        }
-        
-        return null;
-    }
-    
-    private ValueNode<K, V> accessValueNode(Object value, int valueHashCode) {
-        int inputValueIndex = valueHashCode & moduloMask;
-        
-        for (ValueNode<K, V> node = valueNodes[inputValueIndex];
-                node != null;
-                node = node.next) {
-            if (node.mapping.valueHashCode == valueHashCode
-                    && Objects.equals(node.mapping.value, value)) {
-                return node;
-            }
-        }
-    
         return null;
     }
 }
