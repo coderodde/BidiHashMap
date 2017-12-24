@@ -18,8 +18,8 @@ import java.util.Set;
  * @param <K> the key type.
  * @param <V> the value type.
  */
-public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
-
+public final class BidirectionalHashMap<K, V> extends StubMap<K, V> {
+    
     /**
      * This static inner class store all the information for representing a 
      * mapping. Also, it caches the hash codes of both the keys and values in
@@ -323,11 +323,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     }
 
     @Override
-    public Set<K> keySet() {
-        throw new UnsupportedOperationException();
-    }
-    
-    @Override
     public V put(K key, V value) {
         if (isFull()) {
             expand();
@@ -371,11 +366,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     @Override 
     public int size() {
         return size;
-    }
-
-    @Override 
-    public Collection<V> values() {
-        throw new UnsupportedOperationException(); 
     }
 
     /**
@@ -824,7 +814,7 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     private V updateValue(KeyNode<K, V> keyNode, V newValue) {
         V oldValue = keyNode.mapping.value;
         ValueNode<K, V> valueNode = 
-                accessValueNode(newValue,
+                accessValueNode(oldValue,
                                 keyNode.mapping.valueHashCode);
         
         unlinkValueNodeFromIterationList(valueNode);
@@ -837,42 +827,62 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     /**
      * This class implements the inverse view mapping values to keys.
      */
-    private final class InverseMap implements Map<V, K> {
+    private final class InverseMap extends StubMap<V, K> {
 
-        @Override
-        public void clear() {
-            throw new UnsupportedOperationException(); 
-        }
+        /**
+         * This class implements an entry set view over the inverse map.
+         */
+        private final class InverseMapEntrySet 
+                extends StubSet<Map.Entry<V, K>> {
+            
+            private final class InverseMapEntrySetIterator 
+                    implements Iterator<Map.Entry<K, V>> {
 
-        @Override
-        public boolean containsKey(Object key) {
-            throw new UnsupportedOperationException();
-        }
+                private final int expectedModCount = modificationCount;
+                private int iterated = 0;
+                private ValueNode<K, V> entry = valueIterationHead;
+                
+                @Override
+                public boolean hasNext() {
+                    checkModificationCount();
+                    return iterated < size;    
+                }
 
-        @Override
-        public boolean containsValue(Object value) {
-            throw new UnsupportedOperationException();
+                @Override
+                public Entry<K, V> next() {
+                    checkModificationCount();
+                    
+                    if (!hasNext()) {
+                        throw new NoSuchElementException();
+                    }
+                    
+                    ValueNode<K, V> ret = entry;
+                    entry = entry.down;
+                    iterated++;
+                    return ret.mapping;
+                }
+            
+                private void checkModificationCount() {
+                    if (expectedModCount != modificationCount) {
+                        throw new ConcurrentModificationException();
+                    }
+                }
+            }
         }
+        
+        private final InverseMapEntrySet inverseMapEntrySet = 
+                  new InverseMapEntrySet();
+        
 
         @Override
         public Set<Entry<V, K>> entrySet() {
-            throw new UnsupportedOperationException();
+            return inverseMapEntrySet;
         }
 
         @Override
         public K get(Object value) {
             ValueNode<K, V> valueNode = accessValueNode(value);
             return valueNode != null ? valueNode.mapping.key : null;
-        }
-
-        @Override
-        public boolean isEmpty() {
-            throw new UnsupportedOperationException(); 
-        }
-
-        @Override
-        public Set<V> keySet() {
-            throw new UnsupportedOperationException(); 
         }
 
         @Override
@@ -914,16 +924,6 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
             size--;
             modificationCount++;
             return doRemove(valueNode);
-        }
-
-        @Override
-        public int size() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Collection<K> values() {
-            throw new UnsupportedOperationException(); 
         }
 
         /**
@@ -999,7 +999,7 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         private K updateKey(ValueNode<K, V> valueNode, K newKey) {
             K oldKey = valueNode.mapping.key;
             KeyNode<K, V> keyNode = 
-                    accessKeyNode(newKey, valueNode.mapping.keyHashCode);
+                    accessKeyNode(oldKey, valueNode.mapping.keyHashCode);
             
             unlinkKeyNodeFromIterationList(keyNode);
             appendKeyNodeToIterationList(keyNode);
@@ -1012,7 +1012,7 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
     /**
      * This inner class implements a view over entries.
      */
-    private final class EntrySet implements Set<Entry<K, V>> {
+    private final class EntrySet extends StubSet<Entry<K, V>> {
 
         /**
          * This inner class implements an iterator over a set of entries.
@@ -1051,68 +1051,8 @@ public final class BidirectionalHashMap<K, V> extends AbstractMap<K, V> {
         }
 
         @Override
-        public boolean add(Entry<K, V> e) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean addAll(Collection<? extends Entry<K, V>> c) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void clear() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean containsAll(Collection<?> c) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean isEmpty() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public Iterator<Entry<K, V>> iterator() {
             return new EntrySetIterator();
-        }
-
-        @Override
-        public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean removeAll(Collection<?> c) {
-            throw new UnsupportedOperationException();    
-        }
-
-        @Override
-        public boolean retainAll(Collection<?> c) {
-            throw new UnsupportedOperationException();
-        }
-        
-        @Override
-        public int size() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Object[] toArray() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public <T> T[] toArray(T[] a) {
-            throw new UnsupportedOperationException();
         }
     }
 }

@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 
 public class BidirectionalHashMapTest {
     
-    private Map<Integer, Integer> map;
+    private BidirectionalHashMap<Integer, Integer> map;
     
     @Before
     public void before() {
@@ -141,7 +141,7 @@ public class BidirectionalHashMapTest {
     }
     
     @Test
-    public void testEntrySet() {
+    public void testEntrySet1() {
         map.put(10, 100);
         map.put(3, 30);
         map.put(5, 50);
@@ -172,7 +172,41 @@ public class BidirectionalHashMapTest {
         assertEquals(Integer.valueOf(10), e.getValue());
         
         assertFalse(iterator.hasNext());
+    }
+    
+    @Test
+    public void testEntrySet2() {
+        map.put(10, 100);
+        map.put(3, 30);
+        map.put(5, 50);
+        map.put(1, 10);
         
+        map.put(3, 40);
+        
+        Iterator<Map.Entry<Integer, Integer>> iterator = 
+                map.entrySet().iterator();
+        
+        Map.Entry<Integer, Integer> e;
+        
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(10), e.getKey());
+        assertEquals(Integer.valueOf(100), e.getValue());
+        
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(3), e.getKey());
+        assertEquals(Integer.valueOf(40), e.getValue());
+        
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(5), e.getKey());
+        assertEquals(Integer.valueOf(50), e.getValue());
+        
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(1), e.getKey());
+        assertEquals(Integer.valueOf(10), e.getValue());
     }
     
     @Test(expected = ConcurrentModificationException.class)
@@ -186,5 +220,83 @@ public class BidirectionalHashMapTest {
         iterator.next();
         map.remove(1);
         iterator.next();
+    }
+    
+    @Test
+    public void testInverseGet() {
+        BidirectionalHashMap<Integer, String> map =
+                new BidirectionalHashMap<>();
+        
+        map.put(1, "1");
+        map.put(2, "2");
+        map.put(4, "4");
+        
+        assertNull(map.inverseMap().get("a"));
+        assertEquals(Integer.valueOf(1), map.inverseMap().get("1"));
+        assertEquals(Integer.valueOf(2), map.inverseMap().get("2"));
+        assertEquals(Integer.valueOf(4), map.inverseMap().get("4"));
+        
+        map.put(2, "22");
+        
+        assertEquals(Integer.valueOf(2), map.inverseMap().get("22"));
+        assertNull(map.inverseMap().get("2"));
+        assertEquals("22", map.get(2));
+    }
+    
+    @Test
+    public void testInversePut() {
+        BidirectionalHashMap<Integer, String> map = 
+                new BidirectionalHashMap<>();
+        
+        map.inverseMap().put("1", 1);
+        map.inverseMap().put("2", 2);
+        
+        assertTrue(map.containsValue("1"));
+        assertTrue(map.containsValue("2"));
+        assertTrue(map.containsKey(1));
+        assertTrue(map.containsKey(2));
+        
+        assertEquals("1", map.get(1));
+        assertEquals("2", map.get(2));
+        assertNull(map.get(3));
+        assertEquals(Integer.valueOf(1), map.inverseMap().get("1"));
+        assertEquals(Integer.valueOf(2), map.inverseMap().get("2"));
+        assertNull(map.inverseMap().get("3"));
+        
+        map.inverseMap().put("2", 22);
+        assertNull(map.get(2));
+        assertEquals("2", map.get(22));
+    }
+    
+    @Test
+    public void testInverseRemove() {
+        map.put(1, 11);
+        map.put(2, 12);
+        map.put(4, 14);
+        
+        map.remove(2);
+        assertFalse(map.containsKey(2));
+        map.inverseMap().remove(15);
+        assertEquals(2, map.size());
+        map.inverseMap().remove(11);
+        assertFalse(map.containsKey(1));
+        assertEquals(1, map.size());
+    }
+    
+    @Test
+    public void testOrder() {
+        map.put(1, 101);
+        map.put(2, 102);
+        map.put(3, 103);
+        map.put(4, 104);
+        map.inverseMap().put(102, -2);
+        
+        Iterator<Map.Entry<Integer, Integer>> iterator =
+                map.entrySet().iterator();
+        
+        assertTrue(iterator.hasNext());
+        Map.Entry<Integer, Integer> e = iterator.next();
+        
+        
     }
 }
