@@ -828,15 +828,16 @@ public final class BidirectionalHashMap<K, V> extends StubMap<K, V> {
      * This class implements the inverse view mapping values to keys.
      */
     private final class InverseMap extends StubMap<V, K> {
-
-        /**
-         * This class implements an entry set view over the inverse map.
-         */
-        private final class InverseMapEntrySet 
-                extends StubSet<Map.Entry<V, K>> {
+        
+        @Override
+        public K get(Object value) {
+            ValueNode<K, V> valueNode = accessValueNode(value);
+            return valueNode != null ? valueNode.mapping.key : null;
+        }
+        
+        private final class KeySet extends StubSet<V> {
             
-            private final class InverseMapEntrySetIterator 
-                    implements Iterator<Map.Entry<K, V>> {
+            private final class KeySetIterator implements Iterator<V> {
 
                 private final int expectedModCount = modificationCount;
                 private int iterated = 0;
@@ -845,44 +846,39 @@ public final class BidirectionalHashMap<K, V> extends StubMap<K, V> {
                 @Override
                 public boolean hasNext() {
                     checkModificationCount();
-                    return iterated < size;    
+                    return iterated < size;
                 }
 
                 @Override
-                public Entry<K, V> next() {
+                public V next() {
                     checkModificationCount();
                     
                     if (!hasNext()) {
                         throw new NoSuchElementException();
                     }
                     
-                    ValueNode<K, V> ret = entry;
+                    ValueNode<K, V> valueNode = entry;
                     entry = entry.down;
                     iterated++;
-                    return ret.mapping;
+                    return valueNode.mapping.value;
                 }
-            
+                
                 private void checkModificationCount() {
                     if (expectedModCount != modificationCount) {
                         throw new ConcurrentModificationException();
                     }
                 }
             }
+            
+            @Override
+            public KeySetIterator iterator() {
+                return new KeySetIterator();
+            }
         }
         
-        private final InverseMapEntrySet inverseMapEntrySet = 
-                  new InverseMapEntrySet();
-        
-
         @Override
-        public Set<Entry<V, K>> entrySet() {
-            return inverseMapEntrySet;
-        }
-
-        @Override
-        public K get(Object value) {
-            ValueNode<K, V> valueNode = accessValueNode(value);
-            return valueNode != null ? valueNode.mapping.key : null;
+        public Set<V> keySet() {
+            return new KeySet();
         }
 
         @Override
@@ -1037,10 +1033,10 @@ public final class BidirectionalHashMap<K, V> extends StubMap<K, V> {
                     throw new NoSuchElementException();
                 }
                 
-                KeyNode<K, V> ret = entry;
+                KeyNode<K, V> keyNode = entry;
                 entry = entry.down;
                 iterated++;
-                return ret.mapping;
+                return keyNode.mapping;
             }
             
             private void checkModificationCount() {

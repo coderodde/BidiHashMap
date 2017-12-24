@@ -296,7 +296,52 @@ public class BidirectionalHashMapTest {
         
         assertTrue(iterator.hasNext());
         Map.Entry<Integer, Integer> e = iterator.next();
+        assertEquals(Integer.valueOf(1), e.getKey());
+        assertEquals(Integer.valueOf(101), e.getValue());
         
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(3), e.getKey());
+        assertEquals(Integer.valueOf(103), e.getValue());
         
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(4), e.getKey());
+        assertEquals(Integer.valueOf(104), e.getValue());
+        
+        assertTrue(iterator.hasNext());
+        e = iterator.next();
+        assertEquals(Integer.valueOf(-2), e.getKey());
+        assertEquals(Integer.valueOf(102), e.getValue());
+        assertFalse(iterator.hasNext());
+        
+        BidirectionalHashMap<String, Integer> map2 = 
+                new BidirectionalHashMap<>();
+        
+        map2.put("1", 1);
+        map2.put("2", 2);
+        map2.put("3", 3);
+        map2.put("4", 4); // (1 -> 2 -> 3 -> 4)
+        
+        map2.put("1", 5); // (2 -> 3 -> 4 -> 5)
+        
+        Iterator<Integer> inverseKeySetIterator = 
+                map2.inverseMap().keySet().iterator();
+        
+        assertTrue(inverseKeySetIterator.hasNext());
+        Integer i = inverseKeySetIterator.next();
+        assertEquals(Integer.valueOf(2), i);
+        
+        assertTrue(inverseKeySetIterator.hasNext());
+        i = inverseKeySetIterator.next();
+        assertEquals(Integer.valueOf(3), i);
+        
+        assertTrue(inverseKeySetIterator.hasNext());
+        i = inverseKeySetIterator.next();
+        assertEquals(Integer.valueOf(4), i);
+        
+        assertTrue(inverseKeySetIterator.hasNext());
+        i = inverseKeySetIterator.next();
+        assertEquals(Integer.valueOf(5), i);
     }
 }
