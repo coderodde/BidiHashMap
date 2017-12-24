@@ -1,5 +1,6 @@
 package net.coderodde.util;
 
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -171,5 +172,19 @@ public class BidirectionalHashMapTest {
         assertEquals(Integer.valueOf(10), e.getValue());
         
         assertFalse(iterator.hasNext());
+        
+    }
+    
+    @Test(expected = ConcurrentModificationException.class)
+    public void testEntrySetThrowsOnComodification() {
+        map.put(1, 1);
+        map.put(2, 2);
+        
+        Iterator<Map.Entry<Integer, Integer>> iterator =
+                map.entrySet().iterator();
+        
+        iterator.next();
+        map.remove(1);
+        iterator.next();
     }
 }
