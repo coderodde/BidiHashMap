@@ -9,9 +9,10 @@ import java.util.Set;
  * 
  * @author Rodion "rodde" Efremov
  * @version 1.6 (Dec 24, 2017)
+ * @param <E> the element type.
  */
 public abstract class StubSet<E> implements Set<E> {
-    
+
     @Override
     public boolean add(E e) {
         throw new UnsupportedOperationException();
